@@ -1,12 +1,11 @@
 const express = require('express');
-const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // フロントエンド（HTMLやブラウザ画面）の静的ファイルを提供
 app.use(express.static(__dirname));
 
-// ❌ Googleなどの埋め込みブロックを解除するプロキシ機能
+// 外部の部品を使わないプロキシ機能
 app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) {
@@ -14,20 +13,24 @@ app.get('/proxy', async (req, res) => {
     }
 
     try {
-        // ターゲットサイトからデータを代わりに取得
-        const response = await axios.get(targetUrl, {
-            responseType: 'text',
+        // Node.js標準のfetchを使ってページデータを取得
+        const response = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
         });
 
-        // 💡 ここが超重要！埋め込みを禁止してくるセキュリティヘッダーを削除します
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.text();
+
+        // 💡 埋め込みをブロックするセキュリティヘッダーを削除して返す
         res.removeHeader('X-Frame-Options');
         res.removeHeader('Content-Security-Policy');
-
-        // きれいに書き換えたデータをブラウザに送り返す
-        res.send(response.data);
+        
+        res.send(data);
     } catch (error) {
         res.status(500).send('ページの取得に失敗しました: ' + error.message);
     }
